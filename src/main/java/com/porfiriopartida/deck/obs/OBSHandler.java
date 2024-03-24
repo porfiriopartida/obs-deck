@@ -1,6 +1,7 @@
-package com.porfiriopartida.obs;
+package com.porfiriopartida.deck.obs;
 
 import com.porfiriopartida.exception.ConfigurationValidationException;
+import com.porfiriopartida.deck.config.Constants;
 import io.obswebsocket.community.client.OBSRemoteController;
 import io.obswebsocket.community.client.message.response.sceneitems.GetSceneItemEnabledResponse;
 import io.obswebsocket.community.client.message.response.sceneitems.GetSceneItemIdResponse;
@@ -27,8 +28,8 @@ public class OBSHandler {
         }
     }
 
-    public void toggleMute() {
-        controller.toggleInputMute("Yeti Mic", 1000l);
+    public void toggleMute(String parameter) {
+        controller.toggleInputMute(parameter, 1000l);
     }
 
     public void transition() {

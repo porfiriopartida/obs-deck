@@ -1,32 +1,39 @@
-package com.porfiriopartida.obs;
+package com.porfiriopartida.deck.networking;
 
 import com.google.gson.Gson;
+import com.porfiriopartida.deck.command.Command;
+import com.porfiriopartida.deck.obs.OBSHandler;
+import com.porfiriopartida.deck.util.FileManager;
 import com.porfiriopartida.exception.ConfigurationValidationException;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.*;
 
 public class ServerListener {
     private static final String EXIT_COMMAND = ":quit";
-
-    private final Gson gson = new Gson();
+    private boolean isHeadless = false;
+    private Gson gson;
     Map<String, List<Command>> macrosMap;
     private ServerSocket serverSocket;
     private boolean isRunning = true;
-    public void startListening(final int portNumber) throws IOException, ConfigurationValidationException {
-        buildMacrosMap();
+    List<Command> commandList;
 
+
+    public ServerListener(boolean isHeadless){
+        gson = new Gson();
+        this.isHeadless = isHeadless;
+        commandList = getAvailableCommands();
+    }
+    public void startListening(final int portNumber) throws IOException, ConfigurationValidationException {
         OBSHandler handler = new OBSHandler();
         handler.connect();
         serverSocket = new ServerSocket(portNumber);
 
-        // Thread for reading terminal input
         Thread terminalInputThread = new Thread(() -> {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
                 while (true) {
@@ -46,9 +53,6 @@ public class ServerListener {
         // Start the terminal input thread
         terminalInputThread.start();
         try {
-            InetAddress localhost = InetAddress.getLocalHost();
-            System.out.println("Server is listening on " + localhost.getHostAddress() + ":" + portNumber);
-
             while (isRunning) {
                 try (Socket clientSocket = serverSocket.accept();
                      BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
@@ -61,7 +65,13 @@ public class ServerListener {
                             handleMacro(handler, out, command);
                         } else {
                             // Execute regular command
-                            handleCommand(handler, out, command);
+                            String[] commands = command.split(" ");
+                            if(commands.length > 1){
+                                String concatAllExcept0 = String.join(" ", Arrays.copyOfRange(commands, 1, commands.length));
+                                handleCommand(handler, out, commands[0], concatAllExcept0);
+                            } else {
+                                handleCommand(handler, out, commands[0]);
+                            }
                         }
                     }
                 }
@@ -69,9 +79,13 @@ public class ServerListener {
         } finally {
             // Ensure cleanup is performed before exiting
             cleanup();
-            System.exit(0);
+            isRunning = false;
+            if(isHeadless){
+                System.exit(0);
+            }
         }
     }
+
     private void cleanup() {
         // Clean up resources here
         try {
@@ -79,6 +93,7 @@ public class ServerListener {
             if (serverSocket != null && !serverSocket.isClosed()) {
                 serverSocket.close();
             }
+            isRunning = false;
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -101,7 +116,7 @@ public class ServerListener {
                 handleDelay(duration);
             } else {
                 // Otherwise, handle the regular command
-                handleCommand(handler, out, cmd.getCommand());
+                handleCommand(handler, out, cmd.getCommand(), cmd.getParameters());
             }
         }
     }
@@ -114,22 +129,18 @@ public class ServerListener {
             Thread.currentThread().interrupt();  // Restore interrupted status
         }
     }
-    private void buildMacrosMap(){
-        macrosMap = new HashMap<>();
-        macrosMap.put("MyMacro", Arrays.asList(
-                new Command("ToggleMute"),
-                new Command("ToggleCamera"),
-                new Command(Command.DELAY_COMMAND_TYPE + " 5000"),
-                new Command("ToggleMute"),
-                new Command("ToggleCamera")
-        ));
-    }
+
     private List<Command> getCommandsFromMacro(String macroName) {
         // Retrieve the command list for the given macroName
         return macrosMap.getOrDefault(macroName, Collections.emptyList());
     }
 
     private void handleCommand(OBSHandler handler, PrintWriter out, String command) {
+        this.handleCommand(handler, out, command, "");
+    }
+
+
+    private void handleCommand(OBSHandler handler, PrintWriter out, String command, String parameter) {
         // Print received command to the console
         switch (command){
             case "GET_COMMANDS":
@@ -138,7 +149,7 @@ public class ServerListener {
                 out.println("COMMAND_LIST:" + json);
                 break;
             case "ToggleMute":
-                handler.toggleMute();
+                handler.toggleMute(parameter);
                 out.println("Toggle Mute executed.");
                 break;
             case "Transition":
@@ -156,16 +167,34 @@ public class ServerListener {
         // Implement your logic to execute the received command here
     }
 
-    private List<Command> getAvailableCommands() {
-        List<Command> commands = new ArrayList<>();
-        commands.add(new Command("Toggle Mute", "ToggleMute", "mute_icon.png"));
-        commands.add(new Command("Transition", "Transition", "transition_icon.png"));
-        commands.add(new Command("Green", "Green", "green.png"));
-        commands.add(new Command("Toggle Camera", "ToggleCamera", "toggle_camera.png"));
-        commands.add(new Command("Macro 1", "MACRO:MyMacro", "macro1.png"));
-
-        // Add more commands as needed
-        return commands;
+    public List<Command> getAvailableCommands() {
+        if(commandList == null || commandList.isEmpty()){
+            reloadCommandsFromDisk();
+        }
+        return commandList;
     }
 
+    public void reloadCommandsFromDisk(){
+        commandList = FileManager.loadCommandsFromFile();
+    }
+
+    public boolean isRunning() {
+        return isRunning;
+    }
+
+    public void removeCommand(Command toRemove) {
+        UUID targetUUID = toRemove.getUuid();
+
+        for (Iterator<Command> iterator = commandList.iterator(); iterator.hasNext();) {
+            Command command = iterator.next();
+            if (command.getUuid().equals(targetUUID)) {
+                iterator.remove();
+                break;
+            }
+        }
+    }
+
+    public void stop() {
+        isRunning = false;
+    }
 }

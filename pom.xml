@@ -17,7 +17,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.porfiriopartida.obs.Main</mainClass>
+                            <mainClass>com.porfiriopartida.deck.application.Main</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>
@@ -82,6 +82,18 @@
     </repositories>
 
     <dependencies>
+        <!-- https://mvnrepository.com/artifact/org.apache.logging.log4j/log4j-api -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>2.23.1</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.apache.logging.log4j/log4j-core -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>2.23.1</version>
+        </dependency>
         <dependency>
             <groupId>com.porfiriopartida</groupId>
             <artifactId>window-listener</artifactId>
