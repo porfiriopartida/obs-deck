@@ -5,6 +5,8 @@ import com.porfiriopartida.deck.config.Constants;
 import com.porfiriopartida.deck.networking.ServerListener;
 import com.porfiriopartida.deck.util.FileManager;
 import com.porfiriopartida.exception.ConfigurationValidationException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.junit.platform.commons.util.StringUtils;
 
 import javax.swing.*;
@@ -12,11 +14,14 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
+import java.time.Year;
 import java.util.List;
 import java.awt.event.ActionListener;
 import java.io.IOException;
 
 public class CommandManagerUI {
+    private static final Logger logger = LogManager.getLogger(CommandManagerUI.class);
+
     private JFrame frame;
     private JList<Command> commandList;
     private DefaultListModel<Command> commandListModel;
@@ -28,16 +33,12 @@ public class CommandManagerUI {
 
     private void initialize() {
         frame = new JFrame("Commands Manager");
-        frame.setBounds(100, 100, 450, 300);
+        frame.setBounds(100, 100, 800, 600);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-        JPanel panel = new JPanel();
-
-        addLists();
-        addButtons(panel);
         addMenu();
 
-        frame.add(panel, BorderLayout.SOUTH);
+        addLists();
 
         startServerListener();
     }
@@ -132,59 +133,105 @@ public class CommandManagerUI {
 
     private ActionListener onAboutPressed() {
         return e -> {
-            JOptionPane.showMessageDialog(frame, "Hello World!");
+            StringBuilder sb = new StringBuilder();
+            sb.append("Created by: Porfirio Partida");
+            sb.append("\nStreaming Deck Hub Tools");
+
+            sb.append("\nVersion: 0.2");
+
+            sb.append("\n\n\nCopyright 2023 - " + Year.now().getValue());
+
+            JOptionPane.showMessageDialog(frame, sb);
         };
     }
 
-    private void addButtons(JPanel panel) {
-        JButton addButton = new JButton("+");
-        JButton removeButton = new JButton("-");
-
-//        panel.add(addButton);
-        panel.add(removeButton);
-
-        removeButton.addActionListener(onRemoveCommand());
-        addButton.addActionListener(onAddCommand());
-    }
-
     private void addLists() {
+        JPanel panel = new JPanel();
+
         commandListModel = new DefaultListModel<>();
         commandList = new JList<>(commandListModel);
+        commandList.setCellRenderer(new CustomCellRenderer());
+
         commandList.addMouseListener(onCommandListClicked());
         frame.add(new JScrollPane(commandList), BorderLayout.CENTER);
+
+        frame.add(panel, BorderLayout.SOUTH);
     }
 
     private MouseListener onCommandListClicked() {
         return new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent evt) {
-                JList list = (JList)evt.getSource();
-                if (evt.getClickCount() == 2) {
-                    int index = list.locationToIndex(evt.getPoint());
-                    Command selectedCommand = commandListModel.getElementAt(index);
-                    StringBuilder msgSb = new StringBuilder();
-                    msgSb.append(selectedCommand.getLabel()
-                            + "\n"
-                            + "UUID: " + selectedCommand.getUuid());
-                    if(!StringUtils.isBlank(selectedCommand.getParameters())){
-                        msgSb.append("\n"
-                                + "UUID: " + selectedCommand.getUuid());
+
+                if (evt.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(evt)) { // Single left-click
+                    // Trigger command as a button
+                    int index = commandList.getSelectedIndex();
+                    if (index != -1) {
+                        Command selectedCommand = commandListModel.getElementAt(index);
+                        triggerCommand(selectedCommand);
                     }
-                    JOptionPane.showMessageDialog(frame, msgSb.toString(), selectedCommand.getLabel(), JOptionPane.INFORMATION_MESSAGE);
+                } else if (evt.getClickCount() == 1 && SwingUtilities.isRightMouseButton(evt)) { // Single right-click
+                    // Show context menu
+                    showContextMenu(evt);
                 }
             }
         };
     }
 
-    private ActionListener onRemoveCommand() {
-        return e -> {
-            int selectedIdx = commandList.getSelectedIndex();
-            if (selectedIdx != -1) {
-                Command toRemove = commandListModel.remove(selectedIdx);
-                serverListener.removeCommand(toRemove);
-                // Assuming there's a method in ServerListener to remove a command
-            }
-        };
+    private void triggerCommand(Command selectedCommand) {
+        serverListener.handleCommand(selectedCommand.getCommand(), selectedCommand.getParameters());
+    }
+
+    private void showContextMenu(MouseEvent evt) {
+
+        int index = commandList.getSelectedIndex();
+
+        if (index <= -1) {
+            return;
+        }
+
+        JPopupMenu menu = new JPopupMenu();
+        JMenuItem runItem = new JMenuItem("Run");
+        JMenuItem removeItem = new JMenuItem("Remove");
+        JMenuItem infoItem = new JMenuItem("Info");
+
+        Command selectedCommand = commandListModel.getElementAt(index);
+
+        removeItem.addActionListener(e -> {
+            removeCommand(selectedCommand);
+            Command toRemove = commandListModel.remove(index);
+        });
+
+        infoItem.addActionListener(e -> {
+            ShowInfoPopup(selectedCommand);
+        });
+
+        runItem.addActionListener(e -> {
+            triggerCommand(selectedCommand);
+        });
+
+        menu.add(runItem);
+        menu.addSeparator();
+        menu.add(removeItem);
+        menu.addSeparator();
+        menu.add(infoItem);
+        menu.show(evt.getComponent(), evt.getX(), evt.getY());
+    }
+
+    private void ShowInfoPopup(Command selectedCommand) {
+        StringBuilder msgSb = new StringBuilder();
+        msgSb.append(selectedCommand.getLabel()
+                + "\n"
+                + "UUID: " + selectedCommand.getUuid());
+        if(!StringUtils.isBlank(selectedCommand.getParameters())){
+            msgSb.append("\n"
+                    + "UUID: " + selectedCommand.getUuid());
+        }
+        JOptionPane.showMessageDialog(frame, msgSb.toString(), selectedCommand.getLabel(), JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void removeCommand(Command command){
+        serverListener.removeCommand(command);
     }
 
     private ActionListener onConnect() {
@@ -196,6 +243,7 @@ public class CommandManagerUI {
             }
         };
     }
+
     private ActionListener onAddCommand() {
         return e -> {
 //            if (serverListener == null || !serverListener.isRunning()) {
@@ -216,15 +264,26 @@ public class CommandManagerUI {
     }
 
     private void startServerListener() {
-        serverListener = new ServerListener(false);
+
+        try {
+            serverListener = new ServerListener(false);
+
+        } catch (Exception | ConfigurationValidationException e) {
+            JOptionPane.showMessageDialog(frame, "Failed to create server: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            logger.error(e.getMessage(), e);
+            return;
+        }
+
         new Thread(() -> {
             try {
                 serverListener.startListening(Constants.SERVICE_PORT);
-            } catch (IOException | ConfigurationValidationException e) {
+            } catch (IOException e) {
                 e.printStackTrace();
                 JOptionPane.showMessageDialog(frame, "Failed to start server: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                return;
             }
         }).start();
+
         refreshCommandsList();
     }
 }

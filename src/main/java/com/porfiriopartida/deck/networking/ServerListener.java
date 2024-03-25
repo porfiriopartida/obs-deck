@@ -5,6 +5,8 @@ import com.porfiriopartida.deck.command.Command;
 import com.porfiriopartida.deck.obs.OBSHandler;
 import com.porfiriopartida.deck.util.FileManager;
 import com.porfiriopartida.exception.ConfigurationValidationException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -15,25 +17,70 @@ import java.net.Socket;
 import java.util.*;
 
 public class ServerListener {
+    private static final Logger logger = LogManager.getLogger(ServerListener.class);
+
     private static final String EXIT_COMMAND = ":quit";
-    private boolean isHeadless = false;
+    private boolean isHeadless;
     private Gson gson;
     Map<String, List<Command>> macrosMap;
     private ServerSocket serverSocket;
     private boolean isRunning = true;
     List<Command> commandList;
+    OBSHandler handler;
+    private PrintWriter consoleOutput;
 
 
-    public ServerListener(boolean isHeadless){
+    public ServerListener(boolean isHeadless) throws IOException, ConfigurationValidationException {
         gson = new Gson();
         this.isHeadless = isHeadless;
         commandList = getAvailableCommands();
-    }
-    public void startListening(final int portNumber) throws IOException, ConfigurationValidationException {
-        OBSHandler handler = new OBSHandler();
+        handler = new OBSHandler();
         handler.connect();
+        consoleOutput = new PrintWriter(System.out, true);
+    }
+    public void startListening(final int portNumber) throws IOException {
         serverSocket = new ServerSocket(portNumber);
+        startCmdListener();
 
+        try {
+            processMainLoop();
+        } finally {
+            // Ensure cleanup is performed before exiting
+            cleanup();
+            isRunning = false;
+            if(isHeadless){
+                System.exit(0);
+            }
+        }
+    }
+
+    private void processMainLoop() throws IOException {
+        while (isRunning) {
+            try (Socket clientSocket = serverSocket.accept();
+                 BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+                 PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true))  {
+
+                String command;
+                while ((command = in.readLine()) != null) {
+                    if (command.startsWith("MACRO:")) {
+                        // Execute macro
+                        handleMacro(out, command);
+                    } else {
+                        // Execute regular command
+                        String[] commands = command.split(" ");
+                        if(commands.length > 1){
+                            String concatAllExcept0 = String.join(" ", Arrays.copyOfRange(commands, 1, commands.length));
+                            handleCommand(out, commands[0], concatAllExcept0);
+                        } else {
+                            handleCommand(out, commands[0]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private void startCmdListener() {
         Thread terminalInputThread = new Thread(() -> {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
                 while (true) {
@@ -52,38 +99,6 @@ public class ServerListener {
         });
         // Start the terminal input thread
         terminalInputThread.start();
-        try {
-            while (isRunning) {
-                try (Socket clientSocket = serverSocket.accept();
-                     BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                     PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true))  {
-
-                    String command;
-                    while ((command = in.readLine()) != null) {
-                        if (command.startsWith("MACRO:")) {
-                            // Execute macro
-                            handleMacro(handler, out, command);
-                        } else {
-                            // Execute regular command
-                            String[] commands = command.split(" ");
-                            if(commands.length > 1){
-                                String concatAllExcept0 = String.join(" ", Arrays.copyOfRange(commands, 1, commands.length));
-                                handleCommand(handler, out, commands[0], concatAllExcept0);
-                            } else {
-                                handleCommand(handler, out, commands[0]);
-                            }
-                        }
-                    }
-                }
-            }
-        } finally {
-            // Ensure cleanup is performed before exiting
-            cleanup();
-            isRunning = false;
-            if(isHeadless){
-                System.exit(0);
-            }
-        }
     }
 
     private void cleanup() {
@@ -101,7 +116,7 @@ public class ServerListener {
         // You can add more cleanup logic here if needed
     }
 
-    private void handleMacro(OBSHandler handler, PrintWriter out, String command) {
+    private void handleMacro(PrintWriter out, String command) {
         String[] parts = command.split(":");
         String macroName = parts[1];
 
@@ -116,7 +131,7 @@ public class ServerListener {
                 handleDelay(duration);
             } else {
                 // Otherwise, handle the regular command
-                handleCommand(handler, out, cmd.getCommand(), cmd.getParameters());
+                handleCommand(out, cmd.getCommand(), cmd.getParameters());
             }
         }
     }
@@ -135,13 +150,13 @@ public class ServerListener {
         return macrosMap.getOrDefault(macroName, Collections.emptyList());
     }
 
-    private void handleCommand(OBSHandler handler, PrintWriter out, String command) {
-        this.handleCommand(handler, out, command, "");
+    private void handleCommand(PrintWriter out, String command) {
+        this.handleCommand(out, command, "");
     }
-
-
-    private void handleCommand(OBSHandler handler, PrintWriter out, String command, String parameter) {
-        // Print received command to the console
+    public void handleCommand(String command, String parameters){
+        this.handleCommand(consoleOutput, command, parameters);
+    }
+    private void handleCommand(PrintWriter out, String command, String parameters) {
         switch (command){
             case "GET_COMMANDS":
                 List<Command> commands = getAvailableCommands();
@@ -149,7 +164,7 @@ public class ServerListener {
                 out.println("COMMAND_LIST:" + json);
                 break;
             case "ToggleMute":
-                handler.toggleMute(parameter);
+                handler.toggleMute(parameters);
                 out.println("Toggle Mute executed.");
                 break;
             case "Transition":
@@ -185,6 +200,13 @@ public class ServerListener {
     public void removeCommand(Command toRemove) {
         UUID targetUUID = toRemove.getUuid();
 
+        StringBuilder sb = new StringBuilder();
+        sb.append("Server Listener");
+        sb.append("\nRemoving " + toRemove.getLabel());
+        sb.append("\nID " + targetUUID);
+        sb.append("\nTotal Commands: " + commandList.size());
+
+
         for (Iterator<Command> iterator = commandList.iterator(); iterator.hasNext();) {
             Command command = iterator.next();
             if (command.getUuid().equals(targetUUID)) {
@@ -192,6 +214,8 @@ public class ServerListener {
                 break;
             }
         }
+        sb.append("\nNew Total Commands: " + commandList.size());
+        logger.debug(sb);
     }
 
     public void stop() {

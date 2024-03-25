@@ -1,1 +1,0 @@
-[{"label":"Toggle Mute","command":"ToggleMute","icon":"mute_icon.png"},{"label":"Transition","command":"Transition","icon":"transition_icon.png"},{"label":"Green","command":"Green","icon":"green.png"},{"label":"Toggle Camera","command":"ToggleCamera","icon":"toggle_camera.png"},{"label":"Macro 1","command":"MACRO:MyMacro","icon":"macro1.png"}]

@@ -31,11 +31,6 @@ public class Command {
         return command;
     }
 
-    @Override
-    public String toString() {
-        return label + ( StringUtils.isBlank(parameters) ? "":"(" + parameters + ")");
-    }
-
     public UUID getUuid() {
         return uuid;
     }
@@ -50,5 +45,10 @@ public class Command {
 
     public String getParameters() {
         return parameters;
+    }
+
+    @Override
+    public String toString() {
+        return label + ( StringUtils.isBlank(parameters) ? "":" (" + parameters + ")");
     }
 }

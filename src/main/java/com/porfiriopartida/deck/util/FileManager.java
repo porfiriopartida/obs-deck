@@ -7,10 +7,7 @@ import com.porfiriopartida.deck.command.Command;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
 import java.lang.reflect.Type;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
@@ -49,9 +46,37 @@ public class FileManager {
     }
     public static List<Command> loadCommandsFromFile() {
         String filePath = getConfigDirectoryPath() + File.separator + "commands.json";
+        File commandsFile = new File(filePath);
+
+        if(!commandsFile.exists()){
+            try {
+                commandsFile.createNewFile();
+
+                ClassLoader classLoader = FileManager.class.getClassLoader();
+                try (InputStream inputStream = classLoader.getResourceAsStream("config" + File.separator+ "commands.json")) {
+                    if (inputStream == null) {
+                        return null;
+                    }
+                    // Create output stream to destination file outside JAR
+                    try (OutputStream outputStream = new FileOutputStream(commandsFile)) {
+                        // Copy contents from input stream to output stream
+                        byte[] buffer = new byte[1024];
+                        int bytesRead;
+                        while ((bytesRead = inputStream.read(buffer)) != -1) {
+                            outputStream.write(buffer, 0, bytesRead);
+                        }
+                        logger.info("File copied successfully.");
+                    } catch (IOException e) {
+                        logger.error("Error writing commands default file.", e);
+                    }
+                }
+            } catch (IOException e) {
+                logger.warn("Couldn't create commands file.");
+            }
+        }
 
         Gson gson = new Gson();
-        try (FileReader reader = new FileReader(filePath)) {
+        try (FileReader reader = new FileReader(commandsFile)) {
             Type listType = new TypeToken<ArrayList<Command>>(){}.getType();
 
             List<Command> commands = gson.fromJson(reader, listType);

@@ -1,0 +1,7 @@
+[
+  {"label":"Toggle Mute", "parameters": "Yeti Mic", "command":"ToggleMute","icon":"mute_icon.png","uuid":"7a7847c0-96a0-4f4f-932b-aa39ec319d7b"},
+  {"label":"Transition","command":"Transition","icon":"transition_icon.png","uuid":"384a1652-62e5-4af5-9a11-12eb1c0f13e7"},
+  {"label":"Green","command":"Green","icon":"green.png","uuid":"bc936519-29a4-4cd1-855f-fbe5f1375d2f"},
+  {"label":"Toggle Camera","command":"ToggleCamera","icon":"toggle_camera.png","uuid":"ca4f3070-0482-4a25-8aa4-0e9a49e1297f"},
+  {"label":"Macro 1","command":"MACRO:MyMacro","icon":"macro1.png","uuid":"6c29293a-86e9-4485-9e9d-9627406ac9d1"}
+]
