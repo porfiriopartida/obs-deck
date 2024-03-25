@@ -38,9 +38,23 @@ public class CommandManagerUI {
 
         addMenu();
 
-        addLists();
+        addCommandsPanel();
 
         startServerListener();
+    }
+
+
+    private void addCommandsPanel() {
+        JPanel panel = new JPanel();
+
+        commandListModel = new DefaultListModel<>();
+        commandList = new JList<>(commandListModel);
+        commandList.setCellRenderer(new CustomCellRenderer());
+
+        commandList.addMouseListener(onCommandListClicked());
+        frame.add(new JScrollPane(commandList), BorderLayout.CENTER);
+
+        frame.add(panel, BorderLayout.SOUTH);
     }
 
     private void addMenu() {
@@ -143,19 +157,6 @@ public class CommandManagerUI {
 
             JOptionPane.showMessageDialog(frame, sb);
         };
-    }
-
-    private void addLists() {
-        JPanel panel = new JPanel();
-
-        commandListModel = new DefaultListModel<>();
-        commandList = new JList<>(commandListModel);
-        commandList.setCellRenderer(new CustomCellRenderer());
-
-        commandList.addMouseListener(onCommandListClicked());
-        frame.add(new JScrollPane(commandList), BorderLayout.CENTER);
-
-        frame.add(panel, BorderLayout.SOUTH);
     }
 
     private MouseListener onCommandListClicked() {
